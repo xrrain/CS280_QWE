@@ -10,6 +10,31 @@ from tqdm import tqdm
 from data_utils import betweenness_centrality_parallel as pbc
 
 
+encoderHaveBatch = True
+
+class decoder(nn.Module):
+    def __init__(self):
+        super(decoder, self).__init__()
+
+
+# two layer MLP, the first hidden layer, I add a Batchnorm to accelerated the training rate.
+class encoder(nn.Module):
+    def __init__(self, inDim, numHidden1, outDim):
+        super(encoder, self).__init__()
+        if encoderHaveBatch == True:
+            self.hidden1 = nn.Sequential(nn.Linear(inDim, numHidden1), nn.BatchNorm1d(numHidden1), nn.ReLU(True))
+        else:
+            self.hidden1 = nn.Sequential(nn.Linear(inDim, numHidden1), nn.ReLU(True))
+
+        self.out = nn.Sequential(nn.Linear(numHidden1, outDim))
+
+    def forward(self, x):
+        x = self.hidden1(x)
+        x = self.out(x)
+        return x
+
+
+
 class QweNet(nn.Module):
 
     def __init__(self, input_dim, latent_dim, T):
