@@ -11,23 +11,24 @@ from data_utils import betweenness_centrality_parallel as pbc
 
 
 class decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, decoder_nodeFeatDim, decoder_embeddingSize):
         super(decoder, self).__init__()
 
 
 # two layer MLP, the first hidden layer, I add a Batchnorm to accelerated the training rate.
 class encoder(nn.Module):
-    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoderHaveBatch = True):
+    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch = True, inTraining = True):
         super(encoder, self).__init__()
         if encoderHaveBatch == True:
-            self.hidden1 = nn.Sequential(nn.Linear(inDim, numHidden1), nn.BatchNorm1d(numHidden1), nn.ReLU(True))
+            self.hidden1 = nn.Sequential(nn.Linear(encoder_inDim, encoder_numHidden1), nn.BatchNorm1d(encoder_numHidden1), nn.LeakyReLU(inTraining == False))
         else:
-            self.hidden1 = nn.Sequential(nn.Linear(inDim, numHidden1), nn.ReLU(True))
+            self.hidden1 = nn.Sequential(nn.Linear(encoder_inDim, encoder_numHidden1), nn.LeakyReLU(inTraining == False))
 
-        self.out = nn.Sequential(nn.Linear(numHidden1, outDim))
+        self.out = nn.Sequential(nn.Linear(encoder_numHidden1 + encoder_auxFeatDim, encoder_outDim))
 
-    def forward(self, x):
+    def forward(self, x, aux_feat):
         x = self.hidden1(x)
+        x = torch.cat((x, aux_feat), 1)
         x = self.out(x)
         return x
 
