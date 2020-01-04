@@ -10,8 +10,6 @@ from tqdm import tqdm
 from data_utils import betweenness_centrality_parallel as pbc
 
 
-encoderHaveBatch = True
-
 class decoder(nn.Module):
     def __init__(self):
         super(decoder, self).__init__()
@@ -19,7 +17,7 @@ class decoder(nn.Module):
 
 # two layer MLP, the first hidden layer, I add a Batchnorm to accelerated the training rate.
 class encoder(nn.Module):
-    def __init__(self, inDim, numHidden1, outDim):
+    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoderHaveBatch = True):
         super(encoder, self).__init__()
         if encoderHaveBatch == True:
             self.hidden1 = nn.Sequential(nn.Linear(inDim, numHidden1), nn.BatchNorm1d(numHidden1), nn.ReLU(True))
