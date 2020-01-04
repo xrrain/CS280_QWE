@@ -7,7 +7,8 @@ import networkx as nx
 import numpy as np
 
 
-def ranktopk(pred, lable, k):
+def ranktopk(pred, lable, percent = 0.01):
+    k = (int)(len(pred) * percent)
     pred_rank = np.argsort(pred)[-k:]
     lable_rank = np.argsort(lable)[-k:]
     num_hit = len(np.intersect1d(pred_rank, lable_rank))
