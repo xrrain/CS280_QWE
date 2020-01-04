@@ -12,27 +12,29 @@ from torch_geometric.nn import GCNConv
 from torch_geometric.utils import from_networkx
 from tqdm import tqdm
 
-from data_utils import betweenness_centrality_parallel as pbc
-from data_utils import ranktopk
-from generate_bc_feature import generate_bc_feature
+from data_util.data_utils import betweenness_centrality_parallel as pbc
+from data_util.data_utils import ranktopk
+from data_util.generate_bc_feature import generate_bc_feature
 import pickle
 
+
 class decoder(nn.Module):
-    def __init__(self, decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, inTraining = True):
+    def __init__(self, decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, inTraining=True):
         super(decoder, self).__init__()
-        self.inputLayer = nn.Sequential(nn.Linear(decoder_nodeFeatDim, decoder_embeddingSize), nn.LeakyReLU(inTraining == False), nn.BatchNorm1d(decoder_embeddingSize))
-        
+        self.inputLayer = nn.Sequential(nn.Linear(decoder_nodeFeatDim, decoder_embeddingSize), nn.LeakyReLU(
+            inTraining == False), nn.BatchNorm1d(decoder_embeddingSize))
+
         #In forward repeat three layers
         self.nodeConv = GCNConv(decoder_embeddingSize, decoder_embeddingSize)
         self.combine = nn.GRUCell(decoder_embeddingSize, decoder_embeddingSize)
         self.outThisCycle = nn.BatchNorm1d(decoder_embeddingSize)
-        
+
         self.outputLayer = nn.BatchNorm1d(decoder_embeddingSize)
 
     def forward(self, x, edge_Index):
         x = self.inputLayer(x)
         max_x = x
-        
+
         for i in range(0, self.maxBpIter):
             pre_x = x
             x = self.nodeConv(x, edge_Index)
@@ -48,14 +50,17 @@ class decoder(nn.Module):
 
 # two layer MLP, the first hidden layer, I add a Batchnorm to accelerated the training rate.
 class encoder(nn.Module):
-    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch = True, inTraining = True):
+    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch=True, inTraining=True):
         super(encoder, self).__init__()
         if encoderHaveBatch == True:
-            self.hidden1 = nn.Sequential(nn.Linear(encoder_inDim, encoder_numHidden1), nn.BatchNorm1d(encoder_numHidden1), nn.LeakyReLU(inTraining == False))
+            self.hidden1 = nn.Sequential(nn.Linear(encoder_inDim, encoder_numHidden1), nn.BatchNorm1d(
+                encoder_numHidden1), nn.LeakyReLU(inTraining == False))
         else:
-            self.hidden1 = nn.Sequential(nn.Linear(encoder_inDim, encoder_numHidden1), nn.LeakyReLU(inTraining == False))
+            self.hidden1 = nn.Sequential(nn.Linear(
+                encoder_inDim, encoder_numHidden1), nn.LeakyReLU(inTraining == False))
 
-        self.out = nn.Sequential(nn.Linear(encoder_numHidden1 + encoder_auxFeatDim, encoder_outDim))
+        self.out = nn.Sequential(
+            nn.Linear(encoder_numHidden1 + encoder_auxFeatDim, encoder_outDim))
 
     def forward(self, x, aux_feat):
         x = self.hidden1(x)
@@ -64,31 +69,29 @@ class encoder(nn.Module):
         return x
 
 
-
 class QweNet(nn.Module):
 
-    def __init__(self, input_dim, latent_dim, T):
+    def __init__(self, decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch=True, inTraining=True):
         super(QweNet).__init__()
-        self.T = T
-        self.input_dim = input_dim
-        self.latent_dim = latent_dim
+        self.decoder = decoder(
+            decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, inTraining)
+        self.encoder = encoder(encoder_inDim, encoder_numHidden1,
+                               encoder_outDim, encoder_auxFeatDim, encoderHaveBatch, inTraining)
 
-    def forward(self, batch_graph_matrix, bath_input):
-        # node features
-        h = []
-        # node neiborhood features
-        h_n = []
-        h_0 = F.relu(torch.matmul(batch_graph_matrix, nn.Linear(self.input_dim, bias=True)(bath_input)))
-        for i in range(self.T):
-            if i == 0:
-                h.append()
+    def forward(self, data):
+        x, edgeIndex = data.x, data.edge_index
+        aux_feat = 1  # add aux_feat's define
+        x = self.decoder(x, edgeIndex)
+        x = self.encoder(x, aux_feat)
+        return x
 
 
 class QweTool:
     def __init__(self):
         self.trainSet = []  # pyg data
         self.testSet = []
-        self.device = torch.device('cuda' if torch.cuda.is_availabel() else 'cpu')
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() else 'cpu')
 
     def build_model(self, input_dim):
         return QweNet(node_features_dim=input_dim)
@@ -113,7 +116,7 @@ class QweTool:
                       ]
         return gen_graphs[graph_type](graph_size)
 
-    def insert_data(self, g,  isTrain = True, label = None):
+    def insert_data(self, g,  isTrain=True, label=None):
         graph_data = from_networkx(g)
         btres = {}
         if label is None:
@@ -124,7 +127,8 @@ class QweTool:
                 label = [btres[node] for node in g.nodes]
         graph_data.y = torch.tensor(label, dtype=torch.float32)
         feature, _ = generate_bc_feature(g, sampler=2)
-        bc_feature = np.array([feature[node] for node in g.nodes]).reshape((g.order(), 1))
+        bc_feature = np.array([feature[node]
+                               for node in g.nodes]).reshape((g.order(), 1))
         aux_feature = np.ones((g.order(), 2))
         node_feature = np.concatenate([bc_feature, aux_feature], axis=1)
 
@@ -158,15 +162,15 @@ class QweTool:
     def pairwise_ranking_loss(self, preds, labels, seed=42):
         lossL = nn.BCEWithLogitsLoss()
         loss = lossL(preds, torch.sigmoid(labels))
-        loss = torch.sum(loss, dim = 1)
+        loss = torch.sum(loss, dim=1)
         return torch.mean(loss)
-
 
     def train(self, model, optimizer, criterion, max_epoch):
         flag = True
         model = model.to(self.device)
         types = [0]
-        self.prepareValidData(N_VALID, min_size=MIN_SIZE, max_size=MAX_SIZE, types=types)
+        self.prepareValidData(N_VALID, min_size=MIN_SIZE,
+                              max_size=MAX_SIZE, types=types)
         self.gen_new_graph(MIN_SIZE, MAX_SIZE, types, num_graph=N_TRAIN)
         save_dir = './../model'
         vcfile = '%s/ValidValue.csv' % save_dir
@@ -175,7 +179,8 @@ class QweTool:
             num = 0
             model.train()
             running_loss = 0.0
-            train_loader = DataLoader(self.trainSet, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
+            train_loader = DataLoader(
+                self.trainSet, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
             for data_batch in train_loader:
                 num += 1
                 data_batch = data_batch.to(self.device)
@@ -192,7 +197,8 @@ class QweTool:
                 running_loss += loss.item()
             start = time.clock()
             if iter and iter % 5000 == 0:
-                self.gen_new_graph(MIN_SIZE, MAX_SIZE, types, num_graph=N_TRAIN)
+                self.gen_new_graph(MIN_SIZE, MAX_SIZE,
+                                   types, num_graph=N_TRAIN)
             if iter % num_percheck == 0:
                 if iter == 0:
                     N_start = start
@@ -205,15 +211,20 @@ class QweTool:
                     frac_topk += temp_topk / N_VALID
                     frac_kendal += temp_kendal / N_VALID
                 test_end = time.time()
-                f_out.write('%.6f, %.6f\n' % (frac_topk, frac_kendal))  # write vc into the file
+                # write vc into the file
+                f_out.write('%.6f, %.6f\n' % (frac_topk, frac_kendal))
                 f_out.flush()
-                print('\niter %d, Top0.01: %.6f, kendal: %.6f' % (iter, frac_topk, frac_kendal))
-                print('testing %d graphs time: %.2fs' % (N_VALID, test_end - test_start))
+                print('\niter %d, Top0.01: %.6f, kendal: %.6f' %
+                      (iter, frac_topk, frac_kendal))
+                print('testing %d graphs time: %.2fs' %
+                      (N_VALID, test_end - test_start))
                 N_end = time.clock()
-                print('%d iterations total time: %.2fs' % (num_percheck, N_end - N_start))
+                print('%d iterations total time: %.2fs' %
+                      (num_percheck, N_end - N_start))
                 print('Training loss is %.4f' % loss)
                 sys.stdout.flush()
-                model_path = '%s/nrange_iter_%d_%d_%d.pkl' % (save_dir, MIN_SIZE, MAX_SIZE, iter)
+                model_path = '%s/nrange_iter_%d_%d_%d.pkl' % (
+                    save_dir, MIN_SIZE, MAX_SIZE, iter)
                 self.saveModel(model_path, model)
             for i, (name, param) in enumerate(model.named_parameters()):
                 if 'bn' not in name:
@@ -221,7 +232,7 @@ class QweTool:
                     writer.add_scalar('loss', running_loss, i)
         f_out.close()
 
-    def predict(self, model,data):
+    def predict(self, model, data):
         model.eval()
         data = data.to(self.device)
         pred = model(data).cpu().detach().numpy()
@@ -238,7 +249,7 @@ class QweTool:
         betw = data.y.cpu().detach().numpy()
         # np.save('%ietr_true.npy' % iter, betw)
         run_time = end - start
-        topk = ranktopk(pred, betw, percent= 0.01)
+        topk = ranktopk(pred, betw, percent=0.01)
         kendal, p_value = kd(betw, pred, nan_policy="omit")
         return run_time, topk, kendal
 
@@ -283,7 +294,8 @@ class QweTool:
             frac_run_time += run_time / n_test
             frac_topk += topk / n_test
             frac_kendal += kendal / n_test
-        print('\nRun_time, Top0.01, Kendall tau: %.6f, %.6f, %.6f' % (frac_run_time, frac_topk, frac_kendal))
+        print('\nRun_time, Top0.01, Kendall tau: %.6f, %.6f, %.6f' %
+              (frac_run_time, frac_topk, frac_kendal))
         return frac_run_time, frac_topk, frac_kendal
 
     def evaluateRealData(self, model_file, graph_file, label_file):  # test real data
@@ -295,7 +307,7 @@ class QweTool:
         for line in open(label_file):
             betw_label.append(float(line.strip().split()[1]))
         start = time.time()
-        self.insert_data(g, isTrain= False, label= betw_label)
+        self.insert_data(g, isTrain=False, label=betw_label)
         end = time.time()
         run_time = end - start
         start1 = time.time()

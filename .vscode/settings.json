@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/Users/hulin/anaconda3/envs/MLpytorch/bin/python",
+    "python.pythonPath": "/root/anaconda3/envs/MLpytorch/bin/python",
     "python.testing.unittestArgs": [
         "-v",
         "-s",
