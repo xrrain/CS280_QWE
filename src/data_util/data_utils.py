@@ -7,6 +7,14 @@ import networkx as nx
 import numpy as np
 
 
+def ranktopk(pred, lable, percent = 0.01):
+    k = (int)(len(pred) * percent)
+    pred_rank = np.argsort(pred)[-k:]
+    lable_rank = np.argsort(lable)[-k:]
+    num_hit = len(np.intersect1d(pred_rank, lable_rank))
+    return min(num_hit / k, 1.0)
+
+
 def chunks(l, n):
     """Divide a list of nodes `l` in `n` chunks"""
     l_c = iter(l)
