@@ -355,6 +355,7 @@ class QweTool:
     def evaluateRealData(self, model, model_file, graph_file, label_file):  # test real data
         g = nx.read_weighted_edgelist(graph_file, nodetype = int)
         sys.stdout.flush()
+        model = model.to(self.device)
         self.loadModel(model_file, model)
         betw_label = []
         for line in open(label_file):
