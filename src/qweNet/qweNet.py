@@ -23,12 +23,12 @@ EMBEDDING_SIZE = 128
 REG_HIDDEN = (int)(EMBEDDING_SIZE / 2)
 MIN_SIZE = 100
 MAX_SIZE = 200
-MAX_EPOCH = 10000
+MAX_EPOCH = 5000
 N_VALID = 100 # number of validation graphs
 N_TRAIN = 1000
 BATCH_SIZE = 32
 LEARNING_RATE = 0.0001
-max_bp_iter = 4     # neighbor propagation steps
+max_bp_iter = 5     # neighbor propagation steps
 
 writer = SummaryWriter('./../result')
 
@@ -49,35 +49,43 @@ class decoder(nn.Module):
 
         self.maxBpIter = decoder_maxBpIter
         self.inputLayer = nn.Sequential(nn.Linear(decoder_nodeFeatDim, decoder_embeddingSize), nn.LeakyReLU(
-            inTraining == False), nn.BatchNorm1d(decoder_embeddingSize))
+            inTraining == False))
+
 
         #In forward repeat three layers
         self.nodeConv = GCNConv(decoder_embeddingSize, decoder_embeddingSize)
-        self.combine = nn.GRUCell(decoder_embeddingSize, decoder_embeddingSize)
-        self.outThisCycle = nn.BatchNorm1d(decoder_embeddingSize)
+        # self.combine = nn.GRUCell(decoder_embeddingSize, decoder_embeddingSize)
+        self.combine1 = nn.Sequential(nn.Linear(decoder_embeddingSize, decoder_embeddingSize), nn.LeakyReLU(inTraining == False))
+        self.combine2 = nn.Linear(decoder_embeddingSize * 2, decoder_embeddingSize)
 
-        self.outputLayer = nn.BatchNorm1d(decoder_embeddingSize)
+        #self.outThisCycle = nn.BatchNorm1d(decoder_embeddingSize)
+
+        #self.outputLayer = nn.BatchNorm1d(decoder_embeddingSize)
 
     def forward(self, x, edge_Index):
         x = self.inputLayer(x)
+        x = torch.norm(x, p = 2, dim = 1)
         max_x = x
 
         for i in range(0, self.maxBpIter):
             pre_x = x
             x = self.nodeConv(x, edge_Index)
-            x = self.combine(pre_x, x)
-            x = self.outThisCycle(x)
+            x = self.combine1(x)
+            x = torch.cat((pre_x, x), dim = 1)
+            x = self.combine2(x)
+            #x = self.outThisCycle(x)
 
             max_x = torch.max(torch.stack((max_x, x), dim = 0), 0)[0]
 
         x = max_x
-        x = self.outputLayer(x)
+        # x = self.outputLayer(x)
+        x = torch.norm(x, p = 2, dim = 1)
         return x
 
 
 # two layer MLP, the first hidden layer, I add a Batchnorm to accelerated the training rate.
 class encoder(nn.Module):
-    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch=True, inTraining=True):
+    def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch=False, inTraining=True):
         super(encoder, self).__init__()
         self.auxFeatDim = encoder_auxFeatDim
         if encoderHaveBatch == True:
