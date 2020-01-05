@@ -64,7 +64,10 @@ class decoder(nn.Module):
 
     def forward(self, x, edge_Index):
         x = self.inputLayer(x)
-        x = torch.norm(x, p = 2, dim = 1)
+        tmp = torch.norm(x, p = 2, dim = 1)
+        tmp = tmp.view(x.size()[0], 1)
+        tmp = tmp.expand(x.size())
+        x = torch.dive(x, tmp)
         max_x = x
 
         for i in range(0, self.maxBpIter):
@@ -79,7 +82,11 @@ class decoder(nn.Module):
 
         x = max_x
         # x = self.outputLayer(x)
-        x = torch.norm(x, p = 2, dim = 1)
+        tmp = torch.norm(x, p = 2, dim = 1)
+        tmp = tmp.view(x.size()[0], 1)
+        tmp = tmp.expand(x.size())
+        x = torch.dive(x, tmp)
+
         return x
 
 
