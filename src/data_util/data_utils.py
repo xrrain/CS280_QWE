@@ -55,6 +55,7 @@ def betweenness_centrality_parallel(G, btres, processes=None):
         res_list = deepcopy(list(bt.values()))
         bt_array += np.array(res_list)
     btres.update(dict(zip(bt_sc[0].keys(), deepcopy(bt_array.tolist()))))
+    p.close()
     # delete locals memory to avid memory
     for x in locals().keys():
         del locals()[x]
