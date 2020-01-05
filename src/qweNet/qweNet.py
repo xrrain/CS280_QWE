@@ -353,7 +353,7 @@ class QweTool:
         return frac_run_time, frac_topk, frac_kendal
 
     def evaluateRealData(self, model, model_file, graph_file, label_file):  # test real data
-        g = nx.read_weighted_edgelist(graph_file)
+        g = nx.read_weighted_edgelist(graph_file, nodetype = int)
         sys.stdout.flush()
         self.loadModel(model_file, model)
         betw_label = []
