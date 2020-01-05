@@ -67,7 +67,7 @@ class decoder(nn.Module):
         tmp = torch.norm(x, p = 2, dim = 1)
         tmp = tmp.view(x.size()[0], 1)
         tmp = tmp.expand(x.size())
-        x = torch.dive(x, tmp)
+        x = torch.div(x, tmp)
         max_x = x
 
         for i in range(0, self.maxBpIter):
@@ -85,7 +85,7 @@ class decoder(nn.Module):
         tmp = torch.norm(x, p = 2, dim = 1)
         tmp = tmp.view(x.size()[0], 1)
         tmp = tmp.expand(x.size())
-        x = torch.dive(x, tmp)
+        x = torch.div(x, tmp)
 
         return x
 
