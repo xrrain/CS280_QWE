@@ -13,15 +13,15 @@ MAX_SIZE = 200
 MAX_EPOCH = 10000
 N_VALID = 10 # number of validation graphs
 N_TRAIN = 100
-BATCH_SIZE = 32
-LEARNING_RATE = 0.0001
+BATCH_SIZE = 16
+LEARNING_RATE = 0.0002
 max_bp_iter = 5     # neighbor propagation steps
 
 def main():
     ########## Train
     btl = QweNet(max_bp_iter, 3, EMBEDDING_SIZE, EMBEDDING_SIZE, REG_HIDDEN, 1, 0)
     System = QweTool()
-    System.train(btl, optim.Adam(btl.parameters(), lr = LEARNING_RATE), System.pairwise_ranking_loss, 100)
+    System.train(btl, optim.Adam(btl.parameters(), lr = LEARNING_RATE), System.pairwise_ranking_loss, 5500)
 
 
 def viaualize_graph():

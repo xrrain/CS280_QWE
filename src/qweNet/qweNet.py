@@ -12,6 +12,7 @@ from torch_geometric.data import DataLoader
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import from_networkx
 from tqdm import tqdm
+import multiprocessing
 
 from data_util.data_utils import betweenness_centrality_parallel as pbc
 from data_util.data_utils import ranktopk
@@ -21,17 +22,17 @@ import pickle
 EMBEDDING_SIZE = 128
 REG_HIDDEN = (int)(EMBEDDING_SIZE / 2)
 MIN_SIZE = 100
-MAX_SIZE = 120
+MAX_SIZE = 200
 MAX_EPOCH = 10000
 N_VALID = 100 # number of validation graphs
 N_TRAIN = 1000
 BATCH_SIZE = 32
 LEARNING_RATE = 0.0001
-max_bp_iter = 5     # neighbor propagation steps
+max_bp_iter = 4     # neighbor propagation steps
 
 writer = SummaryWriter('./../result')
 
-num_percheck = 500
+num_percheck = 200
 
 node_feat_dim = 3  # initial node features, [Dc,1,1]
 aux_feat_dim = 2   # extra node features in the hidden layer in the decoder, [Dc,CI1,CI2,1]
@@ -156,7 +157,7 @@ class QweTool:
                 pbc(g, btres=btres)
             else:
                 btres = nx.betweenness_centrality(g)
-                label = [btres[node] for node in g.nodes]
+            label = [btres[node] for node in g.nodes]
         graph_data.y = torch.tensor(label, dtype=torch.float32)
         feature, _ = generate_bc_feature(g, sampler=2)
         bc_feature = np.array([feature[node]
@@ -172,6 +173,9 @@ class QweTool:
             self.testSet.append(graph_data)
             self.num_test += 1
 
+
+        
+
     def prepareValidData(self, n_data, min_size, max_size, types):
         print('\ngenerating validation graphs...')
         sys.stdout.flush()
@@ -182,13 +186,20 @@ class QweTool:
             g = self.gen_graph(min_size, max_size, graph_type)
             self.insert_data(g, isTrain=False)
 
+
     def gen_new_graph(self, min_size, max_size, types, num_graph=1000):
         print('\ngenerating new training graphs...')
         self.clearTrainset()
         assert (len(types) == num_graph or len(types) == 1)
+        p_list = []
         for i in tqdm(range(num_graph)):
             graph_type = types[0] if len(types) == 1 else types[i]
             g = self.gen_graph(min_size, max_size, graph_type)
+            """
+            p = multiprocessing.Process(target = self.insert_data, args=(g, True, ))
+            p.start()
+            p_list.append(p)
+            """
             self.insert_data(g, isTrain=True)
 
     def pairwise_ranking_loss(self, preds, labels, seed=42):
@@ -219,6 +230,7 @@ class QweTool:
         vcfile = '%s/ValidValue.csv' % save_dir
         f_out = open(vcfile, 'w')
         for iter in range(max_epoch):
+            print(iter)
             num = 0
             model.train()
             running_loss = 0.0
@@ -250,7 +262,7 @@ class QweTool:
                 frac_topk, frac_kendal = 0.0, 0.0
                 test_start = time.time()
                 for idx in range(N_VALID):
-                    run_time, temp_topk, temp_kendal = self.test(model, iter)
+                    run_time, temp_topk, temp_kendal = self.test(model, idx)
                     frac_topk += temp_topk / N_VALID
                     frac_kendal += temp_kendal / N_VALID
                 test_end = time.time()
