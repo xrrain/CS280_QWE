@@ -331,12 +331,11 @@ class QweTool:
         best_model = './models/nrange_iter_%d.ckpt' % (best_model_iter)
         return best_model
 
-    def evaluateSynData(self, data_test, model_file=None):  # test synthetic data
+    def evaluateSynData(self, model, data_test, model_file=None):  # test synthetic data
         if model_file is None:  # if user do not specify the model_file
             model_file = self.findModel()
         print('The best model is :%s' % (model_file))
         sys.stdout.flush()
-        model = self.build_model(3)
         self.loadModel(model_file, model)
         frac_run_time, frac_topk, frac_kendal = 0.0, 0.0, 0.0
         self.clearTestset()
@@ -353,10 +352,9 @@ class QweTool:
               (frac_run_time, frac_topk, frac_kendal))
         return frac_run_time, frac_topk, frac_kendal
 
-    def evaluateRealData(self, model_file, graph_file, label_file):  # test real data
+    def evaluateRealData(self, model, model_file, graph_file, label_file):  # test real data
         g = nx.read_weighted_edgelist(graph_file)
         sys.stdout.flush()
-        model = self.build_model(3)
         self.loadModel(model_file, model)
         betw_label = []
         for line in open(label_file):
