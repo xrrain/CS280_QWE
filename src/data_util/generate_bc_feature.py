@@ -1,12 +1,53 @@
 import math
 import random
-
+import gc
+import itertools
+from copy import deepcopy
+from multiprocessing import Pool
 import networkx as nx
+import numpy as np
 
 
 # here we get a graph in the type of networkx graph type to generate a estimated BC features
 # mainly refer to http://people.seas.harvard.edu/~babis/betweenness-centrality-kdd16.pdf
 # and "Almost Linear-Time Algorithms for Adaptive Betweenness Centrality using Hypergraph Sketches"
+def generate_bc_feature_parallel(G, eps=0.1, normalized=True, sampler=0, seed=None, process=None):
+    pass
+
+
+def generate_degree_feature(G):
+    return nx.degree_centrality(G)
+
+
+def generate_bc_feature_withAstart(G, eps=0.1, normalized=True, seed=None):
+    step = 1 if G.is_directed() else 2
+    if seed is not None:
+        np.random.seed(seed)
+    bc_estimation = dict.fromkeys(G, 0.0)
+    node_size = G.order()
+    hyedge_size = round(math.log(2 * pow(node_size, 3)) / pow(eps, 2))
+    sample_size = min(G.order(), hyedge_size)
+    id_src = np.random.permutation(G.order())[:sample_size].tolist()
+    id_des = np.random.permutation(G.order())[:sample_size].tolist()
+    for i in range(sample_size):
+        src = list(G.nodes)[id_src[i]]
+        des = list(G.nodes)[id_des[i]]
+        if src == des:
+            continue
+        try:
+            hyedge = nx.astar_path(G, src, des)
+        except nx.NetworkXNoPath:
+            continue
+        hyedge.remove(src)
+        hyedge.remove(des)
+        for node in hyedge:
+            bc_estimation[node] += step
+    if normalized:
+        for node in bc_estimation.keys():
+            bc_estimation[node] = bc_estimation[node] / sample_size
+    return bc_estimation
+
+
 def generate_bc_feature(G, eps=0.1, normalized=True, sampler=0, seed=None):
     step = 1 if G.is_directed() else 2
     bc_estimation = dict.fromkeys(G, 0.0)
@@ -37,7 +78,7 @@ def generate_bc_feature(G, eps=0.1, normalized=True, sampler=0, seed=None):
             hyedge.remove(des)
             for node in hyedge:
                 bc_estimation[node] += step
-        elif sampler == 1: ## original hyedge
+        elif sampler == 1:  ## original hyedge
             hyedge = list(paths[random.randint(0, len(paths) - 1)])
             hyedge.remove(src)
             hyedge.remove(des)

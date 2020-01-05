@@ -5,6 +5,7 @@ import torch.optim as optim
 
 from qweNet.qweNet import QweTool
 
+INPUT_DIM = 1
 
 # def main():
 #     ########## Train
@@ -50,6 +51,6 @@ if __name__ == "__main__":
     # print("p_values:{} {} {}".format(p_value1, p_value2, p_value3))
     # print("tau:{} {} {}".format(tau1, tau2, tau3))
     qwetool = QweTool()
-    model = qwetool.build_model(3)
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    model = qwetool.build_model(INPUT_DIM)
+    optimizer = optim.AdamW(model.parameters(), lr=0.0001, betas=(0.1, 0.99))
     qwetool.train(model, optimizer=optimizer, criterion=qwetool.pairwise_ranking_loss, max_epoch=10000)
