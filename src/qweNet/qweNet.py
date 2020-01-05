@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from scipy.stats import kendalltau as kd
+from tensorboardX import SummaryWriter
 from torch import nn
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import GCNConv
@@ -17,10 +18,35 @@ from data_util.data_utils import ranktopk
 from data_util.generate_bc_feature import generate_bc_feature
 import pickle
 
+EMBEDDING_SIZE = 128
+REG_HIDDEN = (int)(EMBEDDING_SIZE / 2)
+MIN_SIZE = 100
+MAX_SIZE = 120
+MAX_EPOCH = 10000
+N_VALID = 100 # number of validation graphs
+N_TRAIN = 1000
+BATCH_SIZE = 32
+LEARNING_RATE = 0.0001
+max_bp_iter = 5     # neighbor propagation steps
+
+writer = SummaryWriter('./../result')
+
+num_percheck = 500
+
+node_feat_dim = 3  # initial node features, [Dc,1,1]
+aux_feat_dim = 2   # extra node features in the hidden layer in the decoder, [Dc,CI1,CI2,1]
+
+initialization_stddev = 0.01
+combineID = 1   # how to combine self embedding and neighbor embedding,
+                   # 0:structure2vec(add node feature and neighbor embedding)
+                   #1:graphsage(concatenation); 2:gru
+
 
 class decoder(nn.Module):
     def __init__(self, decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, inTraining=True):
         super(decoder, self).__init__()
+
+        self.maxBpIter = decoder_maxBpIter
         self.inputLayer = nn.Sequential(nn.Linear(decoder_nodeFeatDim, decoder_embeddingSize), nn.LeakyReLU(
             inTraining == False), nn.BatchNorm1d(decoder_embeddingSize))
 
@@ -41,7 +67,7 @@ class decoder(nn.Module):
             x = self.combine(pre_x, x)
             x = self.outThisCycle(x)
 
-            max_x = torch.max(torch.cat((max_x, x), 0), 0)
+            max_x = torch.max(torch.stack((max_x, x), dim = 0), 0)[0]
 
         x = max_x
         x = self.outputLayer(x)
@@ -52,6 +78,7 @@ class decoder(nn.Module):
 class encoder(nn.Module):
     def __init__(self, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch=True, inTraining=True):
         super(encoder, self).__init__()
+        self.auxFeatDim = encoder_auxFeatDim
         if encoderHaveBatch == True:
             self.hidden1 = nn.Sequential(nn.Linear(encoder_inDim, encoder_numHidden1), nn.BatchNorm1d(
                 encoder_numHidden1), nn.LeakyReLU(inTraining == False))
@@ -64,15 +91,18 @@ class encoder(nn.Module):
 
     def forward(self, x, aux_feat):
         x = self.hidden1(x)
-        x = torch.cat((x, aux_feat), 1)
+        if self.auxFeatDim != 0:
+            x = torch.cat((x, aux_feat), 1)
         x = self.out(x)
         return x
+
+
 
 
 class QweNet(nn.Module):
 
     def __init__(self, decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, encoder_inDim, encoder_numHidden1, encoder_outDim, encoder_auxFeatDim, encoderHaveBatch=True, inTraining=True):
-        super(QweNet).__init__()
+        super(QweNet, self).__init__()
         self.decoder = decoder(
             decoder_maxBpIter, decoder_nodeFeatDim, decoder_embeddingSize, inTraining)
         self.encoder = encoder(encoder_inDim, encoder_numHidden1,
@@ -80,8 +110,10 @@ class QweNet(nn.Module):
 
     def forward(self, data):
         x, edgeIndex = data.x, data.edge_index
-        aux_feat = 1  # add aux_feat's define
+        aux_feat = []  # add aux_feat's define
         x = self.decoder(x, edgeIndex)
+        xlen = x.size()[0]
+        aux_feat = torch.empty(xlen).cuda()
         x = self.encoder(x, aux_feat)
         return x
 
@@ -160,9 +192,20 @@ class QweTool:
             self.insert_data(g, isTrain=True)
 
     def pairwise_ranking_loss(self, preds, labels, seed=42):
-        lossL = nn.BCEWithLogitsLoss()
-        loss = lossL(preds, torch.sigmoid(labels))
-        loss = torch.sum(loss, dim=1)
+
+        np.random.seed(seed)
+        assert len(preds) == len(labels)
+        id_src = np.random.permutation(len(preds))
+        id_des = np.random.permutation(len(preds))
+        # y = np.ones((len(pred,)))
+        # y[labels[id_src] - labels[id_des] < 0] = -1
+        # loss = F.margin_ranking_loss(pred[id_src], pred[id_des], y)
+        pred_res = preds[id_src] - preds[id_des]
+        label_res = labels[id_src] - labels[id_des]
+
+        lossL = nn.BCEWithLogitsLoss(size_average=False)
+        label_res = label_res.view(pred_res.size())
+        loss = lossL(pred_res, torch.sigmoid(label_res))
         return torch.mean(loss)
 
     def train(self, model, optimizer, criterion, max_epoch):
