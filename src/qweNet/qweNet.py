@@ -40,14 +40,14 @@ from generate_bc_feature import generate_bc_feature_withAstart
 #                 h.append()
 EMBEDDING_SIZE = 64
 REG_HIDDEN = (int)(EMBEDDING_SIZE / 2)
-MIN_SIZE = 4000
-MAX_SIZE = 5000
+MIN_SIZE = 2000
+MAX_SIZE = 3000
 MAX_EPOCH = 10000
-N_VALID = 200
-N_TRAIN = 2000
-BATCH_SIZE = 32
-writer = SummaryWriter('./../result/test6')
-save_dir = './../model/test6'
+N_VALID = 10
+N_TRAIN = 90
+BATCH_SIZE = 4
+writer = SummaryWriter('./../result/test8')
+save_dir = './../model/test8'
 INPUT_DIM = 1
 num_percheck = 100
 T = 4
@@ -61,7 +61,7 @@ T = 4
 #         self.dense2 = nn.Linear(embedding_size, embedding_size, bias=True)
 
 class encoder(nn.Module):
-    def __init__(self, maxBpIter, nodeFeatDim, embeddingSize, useDropout=True):
+    def __init__(self, maxBpIter, nodeFeatDim, embeddingSize, useDropout=True, useMaxpooling = True):
         super(encoder, self).__init__()
         self.maxBpIter = maxBpIter
         self.useDropout = useDropout
@@ -73,6 +73,7 @@ class encoder(nn.Module):
         # self.nodeConv2 = GraphConv(embeddingSize, embeddingSize)
         self.combine = nn.GRUCell(embeddingSize, embeddingSize)
         self.bn = nn.BatchNorm1d(embeddingSize)
+        self.useMaxpolling = useMaxpooling
 
     def forward(self, x, edge_index):
         x = self.inputLayer(x)
@@ -85,11 +86,11 @@ class encoder(nn.Module):
             # x = torch.mean(torch.stack((x1, x2), dim=0), 0)
             neibor = self.nodeConv(x, edge_index)
             # x = self.combine(pre_x, neibor)
-            x= neibor
+            x = neibor
             x = self.bn(x)
             x = F.leaky_relu(x)
             max_x = torch.max(torch.stack((max_x, x), dim=0), 0)[0]
-        # x = max_x
+        x = max_x if self.useMaxpolling else x
         x = x / torch.norm(x, p=2)
         return x
 
@@ -122,9 +123,9 @@ class decoder(nn.Module):
 
 class QweNet(nn.Module):
     def __init__(self, encoder_maxBpIter, encoder_nodeFeatDim, encoder_embeddingSize, decoder_inDim, decoder_numHidden1,
-                 decoder_outDim, decoder_auxFeatDim=0, decoderHaveBatch=True, useDropout=True):
+                 decoder_outDim, decoder_auxFeatDim=0, decoderHaveBatch=True, useDropout=True, useMaxpool = False):
         super(QweNet, self).__init__()
-        self.encoder = encoder(encoder_maxBpIter, encoder_nodeFeatDim, encoder_embeddingSize)
+        self.encoder = encoder(encoder_maxBpIter, encoder_nodeFeatDim, encoder_embeddingSize, useMaxpooling= useMaxpool)
         self.decoder = decoder(decoder_inDim, decoder_numHidden1, decoder_outDim, decoder_auxFeatDim, decoderHaveBatch,
                                useDropout=useDropout)
 
@@ -175,7 +176,7 @@ class QweTool:
     def build_model(self):
         model = QweNet(encoder_maxBpIter=T, encoder_nodeFeatDim=INPUT_DIM, encoder_embeddingSize=EMBEDDING_SIZE,
                        decoder_inDim=EMBEDDING_SIZE, decoder_numHidden1=REG_HIDDEN, decoder_outDim=1,
-                       decoder_auxFeatDim=0, decoderHaveBatch=True, useDropout=True)
+                       decoder_auxFeatDim=0, decoderHaveBatch=True, useDropout=False, useMaxpool= False)
         model.apply(self.weights_init)
         return model
 
@@ -198,10 +199,11 @@ class QweTool:
         graph_data = from_networkx(g)
         btres = {}
         if label is None:
-            if g.order() > 2000:
-                pbc(g, btres=btres)
-            else:
-                btres = nx.betweenness_centrality(g)
+            # if g.order() > 2000:
+            #     pbc(g, btres=btres)
+            # else:
+            #     btres = nx.betweenness_centrality(g)
+            btres = nx.betweenness_centrality(g)
             label = [btres[node] for node in g.nodes]
         graph_data.y = torch.tensor(label, dtype=torch.float32)
         feature = generate_bc_feature_withAstart(g)
@@ -298,7 +300,7 @@ class QweTool:
         y[labels[id_src] - labels[id_des] < 0] = -1
         src = torch.pow(10, pred[id_src])
         des = torch.pow(10, pred[id_des])
-        loss = F.margin_ranking_loss(src, des, y, reduction='sum')
+        loss = F.margin_ranking_loss(src, des, y, reduction='mean')
         # pred_res = pred[id_src] - pred[id_des]
         # label_res = labels[id_src] - labels[id_des]
         # loss = F.multilabel_soft_margin_loss(pred_res, torch.sigmoid(label_res), reduction='mean')
@@ -306,8 +308,8 @@ class QweTool:
 
     def train(self, model, optimizer, criterion, max_epoch):
         model = model.to(self.device)
-        types = [0]
-        self.prepareValidData_parallel(N_VALID, min_size=MIN_SIZE, max_size=MAX_SIZE, types=types)
+        types = [3]
+        self.prepareValidData_parallel(N_VALID, min_size=MIN_SIZE, max_size=MAX_SIZE, types=types, processes= 10)
         self.gen_new_graph_parallel(MIN_SIZE, MAX_SIZE, types, num_graph=N_TRAIN)
         # self.prepareValidData(N_VALID, min_size=MIN_SIZE, max_size=MAX_SIZE, types=types)
         # self.gen_new_graph(MIN_SIZE, MAX_SIZE, types, num_graph=N_TRAIN)
