@@ -131,3 +131,4 @@ dmypy.json
 *.pkl
 *model/*
 *result/*
+*data*

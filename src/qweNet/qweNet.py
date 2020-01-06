@@ -40,14 +40,14 @@ from generate_bc_feature import generate_bc_feature_withAstart
 #                 h.append()
 EMBEDDING_SIZE = 64
 REG_HIDDEN = (int)(EMBEDDING_SIZE / 2)
-MIN_SIZE = 2000
-MAX_SIZE = 3000
+MIN_SIZE = 1000
+MAX_SIZE = 1200
 MAX_EPOCH = 10000
-N_VALID = 10
-N_TRAIN = 90
-BATCH_SIZE = 4
-writer = SummaryWriter('./../result/test8')
-save_dir = './../model/test8'
+N_VALID = 20
+N_TRAIN = 180
+BATCH_SIZE = 8
+writer = SummaryWriter('./../result/test9')
+save_dir = './../model/test9'
 INPUT_DIM = 1
 num_percheck = 100
 T = 4
