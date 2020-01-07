@@ -21,8 +21,8 @@ import pickle
 
 EMBEDDING_SIZE = 128
 REG_HIDDEN = (int)(EMBEDDING_SIZE / 2)
-MIN_SIZE = 100
-MAX_SIZE = 200
+MIN_SIZE = 200
+MAX_SIZE = 300
 MAX_EPOCH = 5000
 N_VALID = 100 # number of validation graphs
 N_TRAIN = 1000
@@ -346,18 +346,23 @@ class QweTool:
         best_model = './models/nrange_iter_%d.ckpt' % (best_model_iter)
         return best_model
 
-    def evaluateSynData(self, data_test, model_file=None):  # test synthetic data
+    def evaluateSynData(self, model, model_file, min_size, max_size):  # test synthetic data
         if model_file is None:  # if user do not specify the model_file
             model_file = self.findModel()
         print('The best model is :%s' % (model_file))
         sys.stdout.flush()
-        model = self.build_model(3)
+        model = model.to(self.device)
         self.loadModel(model_file, model)
         frac_run_time, frac_topk, frac_kendal = 0.0, 0.0, 0.0
         self.clearTestset()
+        """
         f = open(data_test, 'rb')
         ValidData = pickle.load(f)
         self.testSet = ValidData
+        """
+        types = [0]
+        self.prepareValidData(100, min_size=min_size,
+                              max_size=max_size, types=types)
         n_test = min(100, len(self.testSet))
         for i in tqdm(range(n_test)):
             run_time, topk, kendal = self.test(model, i)
